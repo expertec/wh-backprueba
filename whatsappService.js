@@ -225,27 +225,55 @@ export function getSessionPhone() {
 }
 
 /**
- * Envía una nota de voz (PTT) por WhatsApp.
- * @param {string} phone — número limpio (solo dígitos, con código de país).
- * @param {string} filePath — ruta al archivo .ogg en el servidor.
+ * Envía una nota de voz en M4A, la sube a Firebase Storage y la guarda en Firestore.
+ * @param {string} phone    — número limpio (solo dígitos, con código de país).
+ * @param {string} filePath — ruta al archivo .m4a en el servidor.
  */
 export async function sendAudioMessage(phone, filePath) {
   const sock = getWhatsAppSock();
-  if (!sock) {
-    throw new Error('Socket de WhatsApp no está conectado');
-  }
+  if (!sock) throw new Error('Socket de WhatsApp no está conectado');
 
-  // Normaliza el número (quita todo lo que no sea dígito)
   const num = String(phone).replace(/\D/g, '');
   const jid = `${num}@s.whatsapp.net`;
 
-  // Lee el archivo subido por Multer
+  // 1) Leer y enviar por Baileys como audio/mp4
   const audioBuffer = fs.readFileSync(filePath);
-
-  // Envía como nota de voz (ptt: true)
   await sock.sendMessage(jid, {
     audio: audioBuffer,
-    mimetype: 'audio/ogg; codecs=opus',
-    ptt: true,
+    mimetype: 'audio/mp4',
+    ptt: false,
   });
+
+  // 2) Subir a Firebase Storage
+  const bucket = admin.storage().bucket();
+  const dest   = `audios/${num}-${Date.now()}.m4a`;
+  const file   = bucket.file(dest);
+  await file.save(audioBuffer, { contentType: 'audio/mp4' });
+  const [mediaUrl] = await file.getSignedUrl({
+    action: 'read',
+    expires: '03-01-2500'
+  });
+
+  // 3) Guardar en Firestore
+  const q = await db.collection('leads')
+                    .where('telefono', '==', num)
+                    .limit(1)
+                    .get();
+  if (!q.empty) {
+    const leadId = q.docs[0].id;
+    const msgData = {
+      content: '',
+      mediaType: 'audio',
+      mediaUrl,
+      sender: 'business',
+      timestamp: new Date()
+    };
+    await db.collection('leads')
+            .doc(leadId)
+            .collection('messages')
+            .add(msgData);
+    await db.collection('leads')
+            .doc(leadId)
+            .update({ lastMessageAt: msgData.timestamp });
+  }
 }

@@ -88,41 +88,44 @@ app.post('/api/whatsapp/send-message', async (req, res) => {
   }
 });
 
+// Recibe el audio, lo convierte a M4A y lo envía por Baileys
 app.post(
   '/api/whatsapp/send-audio',
   upload.single('audio'),
   async (req, res) => {
     const { phone } = req.body;
-    const uploadPath = req.file.path;      // WebM/Opus subido
-    const oggPath = `${uploadPath}.ogg`;    // destino OGG/Opus
+    const uploadPath = req.file.path;           // WebM/Opus crudo
+    const m4aPath   = `${uploadPath}.m4a`;      // destino M4A
 
     try {
-      // 1) Convierte a OGG/Opus
+      // 1) Transcodifica a M4A (AAC)
       await new Promise((resolve, reject) => {
         ffmpeg(uploadPath)
-          .outputOptions(['-c:a libopus', '-vn'])
-          .toFormat('ogg')
-          .save(oggPath)
+          .outputOptions(['-c:a aac', '-vn'])
+          .toFormat('mp4')
+          .save(m4aPath)
           .on('end', resolve)
           .on('error', reject);
       });
 
-      // 2) Envía la nota de voz
-      await sendAudioMessage(phone, oggPath);
+      // 2) Envía la nota de voz ya en M4A
+      await sendAudioMessage(phone, m4aPath);
 
-      // 3) Limpia archivos
+      // 3) Borra archivos temporales
       fs.unlinkSync(uploadPath);
-      fs.unlinkSync(oggPath);
+      fs.unlinkSync(m4aPath);
 
       return res.json({ success: true });
     } catch (error) {
       console.error('Error enviando audio:', error);
+      // limpia lo que haya quedado
       try { fs.unlinkSync(uploadPath); } catch {}
-      try { fs.unlinkSync(oggPath); } catch {}
+      try { fs.unlinkSync(m4aPath); }   catch {}
       return res.status(500).json({ success: false, error: error.message });
     }
   }
 );
+
 
 
 
