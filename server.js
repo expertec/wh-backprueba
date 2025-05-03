@@ -29,6 +29,8 @@ import {
 const app = express();
 const port = process.env.PORT || 3001;
 
+const upload = multer({ dest: path.resolve('./uploads') });
+
 app.use(cors());
 app.use(bodyParser.json());
 
