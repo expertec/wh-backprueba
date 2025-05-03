@@ -4,6 +4,11 @@ import cors from 'cors';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import cron from 'node-cron';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import { sendAudioMessage } from './whatsappService.js';  // ajusta ruta si es necesario
+
 
 dotenv.config();
 
@@ -72,6 +77,30 @@ app.post('/api/whatsapp/send-message', async (req, res) => {
     return res.status(500).json({ error: error.message });
   }
 });
+
+// Recibe el audio y lo envía por Baileys
+app.post(
+  '/api/whatsapp/send-audio',
+  upload.single('audio'),
+  async (req, res) => {
+    try {
+      const { phone } = req.body;             // número limpio del front
+      const filePath = req.file.path;         // ruta temporal del audio
+
+      // Llama a tu función que envía la nota de voz
+      await sendAudioMessage(phone, filePath);
+
+      // Borra el archivo temporal
+      fs.unlinkSync(filePath);
+
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Error enviando audio:', error);
+      return res.status(500).json({ success: false, error: error.message });
+    }
+  }
+);
+
 
 // (Opcional) Marcar todos los mensajes de un lead como leídos
 app.post('/api/whatsapp/mark-read', async (req, res) => {

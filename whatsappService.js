@@ -223,3 +223,29 @@ export function getWhatsAppSock() {
 export function getSessionPhone() {
   return sessionPhone;
 }
+
+/**
+ * Envía una nota de voz (PTT) por WhatsApp.
+ * @param {string} phone — número limpio (solo dígitos, con código de país).
+ * @param {string} filePath — ruta al archivo .ogg en el servidor.
+ */
+export async function sendAudioMessage(phone, filePath) {
+  const sock = getWhatsAppSock();
+  if (!sock) {
+    throw new Error('Socket de WhatsApp no está conectado');
+  }
+
+  // Normaliza el número (quita todo lo que no sea dígito)
+  const num = String(phone).replace(/\D/g, '');
+  const jid = `${num}@s.whatsapp.net`;
+
+  // Lee el archivo subido por Multer
+  const audioBuffer = fs.readFileSync(filePath);
+
+  // Envía como nota de voz (ptt: true)
+  await sock.sendMessage(jid, {
+    audio: audioBuffer,
+    mimetype: 'audio/ogg; codecs=opus',
+    ptt: true,
+  });
+}
