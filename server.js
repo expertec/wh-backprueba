@@ -7,6 +7,14 @@ import cron from 'node-cron';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+
+// Dile a fluent-ffmpeg dónde está el binario
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+
+
 import { sendAudioMessage } from './whatsappService.js';  // ajusta ruta si es necesario
 
 
@@ -80,28 +88,42 @@ app.post('/api/whatsapp/send-message', async (req, res) => {
   }
 });
 
-// Recibe el audio y lo envía por Baileys
 app.post(
   '/api/whatsapp/send-audio',
   upload.single('audio'),
   async (req, res) => {
+    const { phone } = req.body;
+    const uploadPath = req.file.path;      // WebM/Opus subido
+    const oggPath = `${uploadPath}.ogg`;    // destino OGG/Opus
+
     try {
-      const { phone } = req.body;             // número limpio del front
-      const filePath = req.file.path;         // ruta temporal del audio
+      // 1) Convierte a OGG/Opus
+      await new Promise((resolve, reject) => {
+        ffmpeg(uploadPath)
+          .outputOptions(['-c:a libopus', '-vn'])
+          .toFormat('ogg')
+          .save(oggPath)
+          .on('end', resolve)
+          .on('error', reject);
+      });
 
-      // Llama a tu función que envía la nota de voz
-      await sendAudioMessage(phone, filePath);
+      // 2) Envía la nota de voz
+      await sendAudioMessage(phone, oggPath);
 
-      // Borra el archivo temporal
-      fs.unlinkSync(filePath);
+      // 3) Limpia archivos
+      fs.unlinkSync(uploadPath);
+      fs.unlinkSync(oggPath);
 
       return res.json({ success: true });
     } catch (error) {
       console.error('Error enviando audio:', error);
+      try { fs.unlinkSync(uploadPath); } catch {}
+      try { fs.unlinkSync(oggPath); } catch {}
       return res.status(500).json({ success: false, error: error.message });
     }
   }
 );
+
 
 
 // (Opcional) Marcar todos los mensajes de un lead como leídos
