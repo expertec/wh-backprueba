@@ -241,7 +241,7 @@ export async function sendAudioMessage(phone, filePath) {
   await sock.sendMessage(jid, {
     audio: audioBuffer,
     mimetype: 'audio/mp4',
-    ptt: false,
+    ptt: true,    // ← activa el modo nota de voz
   });
 
   // 2) Subir a Firebase Storage
