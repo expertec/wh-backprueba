@@ -117,7 +117,18 @@ export async function connectToWhatsApp() {
           await file.save(buffer, { contentType: 'audio/ogg' });
           [mediaUrl] = await file.getSignedUrl({ action: 'read', expires: '03-01-2500' });
         }
-        // 4) Texto
+
+        // 4) PDF
+else if (msg.message.documentMessage?.mimetype === 'application/pdf') {
+  mediaType = 'pdf';
+  const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: Pino() });
+  const fileName = `pdfs/${phone}-${Date.now()}.pdf`;
+  const file = bucket.file(fileName);
+  await file.save(buffer, { contentType: 'application/pdf' });
+  [mediaUrl] = await file.getSignedUrl({ action: 'read', expires: '03-01-2500' });
+}
+
+        // 5) Texto
         else {
           content = msg.message.conversation
                   ?? msg.message.extendedTextMessage?.text
